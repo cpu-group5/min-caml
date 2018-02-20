@@ -21,11 +21,9 @@ type t = (* ¥¯¥í¡¼¥¸¥ãÊÑ´¹¸å¤Î¼° (caml2html: closure_t) *)
   | AppCls of Id.t * Id.t list
   | AppDir of Id.l * Id.t list
   | Tuple of Id.t list
-  | ConstTuple of Id.l
   | LetTuple of (Id.t * Type.t) list * Id.t * t
   | Get of Id.t * Id.t
   | Put of Id.t * Id.t * Id.t
-  | ConstArray of Id.l
   | ExtArray of Id.l
   | Ftoi of Id.t
   | Itof of Id.t
@@ -44,7 +42,7 @@ type tupledef = {name : Id.l * Type.t;
 type prog = Prog of fundef list * t
 
 let rec fv = function
-  | Unit | Int(_) | Float(_) | ExtArray(_) | ConstArray(_) | ConstTuple(_) -> S.empty
+  | Unit | Int(_) | Float(_) | ExtArray(_) -> S.empty
   | Neg(x) | FNeg(x) -> S.singleton x
   | Add(x, y) | Sub(x, y) | Mul(x, y) | Div(x, y) | FAdd(x, y) | FSub(x, y) | FMul(x, y) | FDiv(x, y) | Get(x, y) -> S.of_list [x; y]
   | IfEq(x, y, e1, e2)| IfLE(x, y, e1, e2) -> S.add x (S.add y (S.union (fv e1) (fv e2)))
@@ -91,7 +89,7 @@ type fundef_ext = | F of fundef | E
 let lenv : (Id.l * fundef_ext) list ref = ref []
 
 let rec eval constenv = function(*¿¿¿¿¿¿¿¿*)
-  |Unit|Int(_)|Float(_)|ConstTuple(_)|ConstArray(_) as const ->
+  |Unit|Int(_)|Float(_) as const ->
     Some const
   |Add(x,y) when M.mem x constenv&&M.mem y constenv ->
     let v1=(match M.find x constenv with
@@ -162,20 +160,7 @@ let rec eval constenv = function(*¿¿¿¿¿¿¿¿*)
   |AppDir(_,_) | AppCls(_,_) -> None
   |Tuple _->None(*constTuple¿¿¿¿¿g¿¿¿¿¿¿*)
   |LetTuple(xts,y,e)->
-    (try
-      (match M.find y constenv with
-       |ConstTuple(l),_->
-         (match List.find (fun {name=(x,_);body=_} ->l=x) !tuples with
-          |{name=_;body=y'}->
-            let constenv'=List.fold_left2
-                            (fun env (id,t) const ->M.add id (const,t) env)
-                            constenv
-                            xts
-                            y' in
-            eval constenv' e)
-       |_ ->assert false)
-    with
-      Not_found->eval constenv e)
+          eval constenv e
   |Get _|Put _ |ExtArray _ -> None
   |Ftoi _|Itof _|FAbs _|FSqrt _ -> None
   |_ ->None
@@ -241,55 +226,12 @@ let rec g env constenv known = function (* ¥¯¥í¡¼¥¸¥ãÊÑ´¹¥ë¡¼¥Á¥óËÜÂÎ (caml2html
       AppDir(Id.L(x), ys)
   | KNormal.App(f, xs) -> AppCls(f, xs)
   | KNormal.Tuple(xs) ->
-          (try
-              let const_xs_ts = List.map (fun x -> M.find x constenv) xs in
-              let (const_xs, ts) = List.split const_xs_ts in
-              let t = Type.Tuple(ts) in
-              let x = Id.genid "const_tuple" in
-              (tuples := { name = (Id.L(x), t); body = const_xs } :: !tuples);
-              ConstTuple(Id.L(x))
-           with Not_found -> Tuple(xs))
+          Tuple(xs)
   | KNormal.LetTuple(xts, y, e) -> 
-          (try
-              (match M.find y constenv with
-              | ConstTuple(l), _ ->
-                      (match List.find (fun { name = (x, _); body = _ } -> l = x) !tuples with
-                      | { name = _; body = y' } ->
-                              let constenv' = List.fold_left2
-                                         (fun env' (id, t) const -> M.add id (const, t) env')
-                                         constenv xts y' in
-                              LetTuple(xts, y, g env constenv' known e))
-                      | _ -> assert false)
-           with Not_found -> LetTuple(xts, y, g (M.add_list xts env) constenv known e))
+               LetTuple(xts, y, g (M.add_list xts env) constenv known e)
   | KNormal.Get(x, y) -> Get(x, y)
   | KNormal.Put(x, y, z) -> Put(x, y, z)
   | KNormal.ExtArray(x) -> ExtArray(Id.L(x))
-  | KNormal.ExtFunApp(x, [arg1; arg2]) when (x = "create_array" || x = "create_float_array") ->
-          (try 
-              let arg1' = (match M.find arg1 constenv with (Int(i), _) -> i | _ -> assert false) in
-              let (arg2', t2) = M.find arg2 constenv in
-              let x = Id.genid "const_array" in
-              (arrays := { name = (Id.L(x), Type.Array(t2));
-                           size = arg1';
-                           initv = arg2'} :: !arrays);
-              ConstArray(Id.L(x))
-           with Not_found ->
-              let ys = [arg1; arg2] in
-              if (x = Id.string_to_id "int_of_float") then
-                  let arg = List.hd ys in
-                  Ftoi arg
-              else if (x = Id.string_to_id "float_of_int") then
-                  let arg = List.hd ys in
-                  Itof arg
-              else if (x = Id.string_to_id "fabs") then
-                  let arg = List.hd ys in
-                  FAbs arg
-              else if (x = Id.string_to_id "sqrt") then
-                  let arg = List.hd ys in
-                  FSqrt arg
-              else
-              (lenv := (Id.L("min_caml_" ^ x), E) :: !lenv;
-                AppDir(Id.L("min_caml_" ^ x), ys)))
   | KNormal.ExtFunApp(x, ys) ->
           if (x = Id.string_to_id "int_of_float") then
               let arg = List.hd ys in

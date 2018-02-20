@@ -25,13 +25,14 @@ let lexbuf outchan l global_l = (* バッファをコンパイルしてチャンネルへ出力する 
   *)
   Emit.f outchan
     (RegAlloc.f
+    (Simm.f
           (Virtual.f
              (Closure.f
                 (iter !limit
                    (Alpha.f
                       (KNormal.f
                          (Typing.f
-                            (global (Parser.exp Lexer.token l) (Parser.exp Lexer.token global_l)))))))))
+                            (global (Parser.exp Lexer.token l) (Parser.exp Lexer.token global_l))))))))))
 
 let string s globalchan = lexbuf stdout (Lexing.from_string s) (Lexing.from_channel globalchan)(* 文字列をコンパイルして標準出力に表示する (caml2html: main_string) *)
 

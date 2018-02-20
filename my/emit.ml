@@ -266,8 +266,6 @@ let print_const oc e =
   | Closure.Unit -> ()
   | Closure.Int(i) -> Printf.fprintf oc "\t0x%x\n" i
   | Closure.Float(f) -> Printf.fprintf oc "\t0x%lx\n" (gethi f)
-  | Closure.ConstTuple(Id.L(x)) | Closure.ConstArray(Id.L(x))
-    -> Printf.fprintf oc "\t%s\n" x
   | _ -> assert false
 
 let print_array oc { Closure.name = (Id.L(x), t); Closure.size = i; Closure.initv = e } =
