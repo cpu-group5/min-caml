@@ -20,9 +20,9 @@ make min-cmal
 ```
 
 ## 使い方
-- min-camlがコンパイラ。ファイル名を引数に渡す。
+- min-camlがコンパイラ。MinCamlファイル名を引数に渡す。
     例：
     ```
-    ./min-caml fib.s
+    ./min-caml fib.ml
     ```
 - min-caml.topがインタープリタ
